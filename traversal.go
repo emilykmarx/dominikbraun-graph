@@ -1,12 +1,82 @@
 package graph
 
 import (
+	"errors"
 	"fmt"
+)
+
+// Get all paths containing start, return resulting subgraph.
+// Panic on error.
+// Does not copy edge or vertex properties.
+func Query[K comparable, T any](g Graph[K, T], start K) Graph[K, T] {
+	subg := NewLike(g)
+	addNodes := func(cur K, oldNeigh K) {
+		for _, hash := range []K{cur, oldNeigh} {
+			node, err := g.Vertex(hash)
+			if err != nil {
+				panic(fmt.Errorf("%v not found", hash))
+			}
+			err = subg.AddVertex(node)
+			if err != nil && !errors.Is(err, ErrVertexAlreadyExists) {
+				panic(err)
+			}
+		}
+	}
+	addEdge := func(cur K, oldNeigh K, direction Direction) {
+		var err error
+		if cur != start || oldNeigh != start {
+			if direction == Forwards {
+				// visit parent first => oldNeigh is parent
+				err = subg.AddEdge(oldNeigh, cur)
+			} else {
+				err = subg.AddEdge(cur, oldNeigh)
+			}
+			if err != nil && !errors.Is(err, ErrEdgeAlreadyExists) {
+				panic(err)
+			}
+		} else {
+			// start node is called with itself
+		}
+	}
+
+	fwdvisit := func(cur K, oldNeigh K) VisitRet {
+		addNodes(cur, oldNeigh)
+		addEdge(cur, oldNeigh, Forwards)
+		return KeepVisiting
+	}
+	bkwdvisit := func(cur K, oldNeigh K) VisitRet {
+		addNodes(cur, oldNeigh)
+		addEdge(cur, oldNeigh, Backwards)
+		return KeepVisiting
+	}
+
+	visit := fwdvisit
+	for _, direction := range []Direction{Forwards, Backwards} {
+		opts := DFSOpts[K, T]{Visit: &visit, All_paths: true, Direction: direction}
+		err := DFS(g, start, opts)
+		if err != nil {
+			panic(err)
+		}
+		visit = bkwdvisit
+	}
+
+	return subg
+}
+
+type VisitRet int
+
+const (
+	KeepVisiting VisitRet = iota
+	StopVisiting
 )
 
 // Options for DFS*()
 type DFSOpts[K comparable, T any] struct {
-	Visit           *func(K) bool
+	// If forwards direction: visit(child, parent we found it by)
+	// If backwards direction: visit(parent, child we found it by)
+	// Exception: start node is called with visit(start, start).
+	// Return whether to keep visiting descendants/ancestors.
+	Visit           *func(cur K, oldNeigh K) VisitRet
 	Update_vertices UpdatePathVertices[K, T]
 	All_paths       bool
 	Direction       Direction
@@ -63,18 +133,20 @@ func DFS[K comparable, T any](g Graph[K, T], start K, opts DFSOpts[K, T]) error 
 	}
 
 	type stackNode struct {
-		hash K
+		hash  K
+		neigh K // neighbor we found it by
 	}
 	stack := newStack[stackNode]()
 	visited := make(map[K]bool)
 	// Nodes visited on the current path
 	visited_path := make(map[K]bool)
 
-	stack.push(stackNode{hash: start})
+	stack.push(stackNode{hash: start, neigh: start})
 
 	for !stack.isEmpty() {
 		cur, _ := stack.pop()
 		currentHash := cur.hash
+		oldNeighHash := cur.neigh
 
 		_, visited_ever := visited[currentHash]
 		_, visited_on_path := visited_path[currentHash]
@@ -84,9 +156,8 @@ func DFS[K comparable, T any](g Graph[K, T], start K, opts DFSOpts[K, T]) error 
 		}
 
 		if should_visit {
-			// Stop traversing the graph if the visit function returns true.
 			if opts.Visit != nil {
-				if stop := (*opts.Visit)(currentHash); stop {
+				if stop := (*opts.Visit)(currentHash, oldNeighHash); stop == StopVisiting {
 					break
 				}
 			}
@@ -94,9 +165,9 @@ func DFS[K comparable, T any](g Graph[K, T], start K, opts DFSOpts[K, T]) error 
 			visited_path[currentHash] = true
 
 			leaf := true
-			for neighHash := range m[currentHash] {
-				stack.push(stackNode{hash: neighHash})
-				err = updatePathVertices(g, currentHash, neighHash, opts.Update_vertices, opts.Direction)
+			for newNeighHash := range m[currentHash] {
+				stack.push(stackNode{hash: newNeighHash, neigh: currentHash})
+				err = updatePathVertices(g, currentHash, newNeighHash, opts.Update_vertices, opts.Direction)
 				if err != nil {
 					return err
 				}

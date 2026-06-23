@@ -40,10 +40,10 @@ func Postfix(v string) string {
 // (Takes multiple possible expected for tests where result could depend both on order visited in original DFS, and order visited here)
 func checkVertexValues(t *testing.T, test_name string, graph Graph[string, string], expected_new_nodes [][]string) {
 	visited := []string{}
-	visit := func(hash string) bool {
+	visit := func(hash string, _ string) VisitRet {
 		n, _ := graph.Vertex(hash)
 		visited = append(visited, n)
-		return false
+		return KeepVisiting
 	}
 	opts := DFSOpts[string, string]{Visit: &visit, All_paths: false, Direction: Forwards}
 	err := DFSAllStartingNodes(graph, opts)
@@ -197,15 +197,15 @@ func TestDirectedDFS(t *testing.T) {
 			graph := directedGraph(t, name, test)
 			visited := []int{}
 
-			visit := func(value int) bool {
+			visit := func(value int, _ int) VisitRet {
 				visited = append(visited, value)
 
 				if test.stopAtVertex != -1 {
 					if value == test.stopAtVertex {
-						return true // should stop visiting
+						return StopVisiting
 					}
 				}
-				return false
+				return KeepVisiting
 			}
 
 			if (name == diamond_testname) && !all_paths {
@@ -348,15 +348,15 @@ func TestUndirectedDFS(t *testing.T) {
 
 		visited := make(map[int]struct{})
 
-		visit := func(value int) bool {
+		visit := func(value int, _ int) VisitRet {
 			visited[value] = struct{}{}
 
 			if test.stopAtVertex != -1 {
 				if value == test.stopAtVertex {
-					return true
+					return StopVisiting
 				}
 			}
-			return false
+			return KeepVisiting
 		}
 
 		opts := DFSOpts[int, int]{Visit: &visit, All_paths: false, Direction: Forwards}
