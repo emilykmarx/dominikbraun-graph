@@ -8,7 +8,7 @@ import (
 // Get all paths containing start, return resulting subgraph.
 // Panic on error.
 // Does not copy edge or vertex properties.
-func Query[K comparable, T any](g Graph[K, T], start K) Graph[K, T] {
+func Query[K comparable, T any](g Graph[K, T], start K, end *K) Graph[K, T] {
 	subg := NewLike(g)
 	addNodes := func(cur K, oldNeigh K) {
 		for _, hash := range []K{cur, oldNeigh} {
@@ -50,14 +50,27 @@ func Query[K comparable, T any](g Graph[K, T], start K) Graph[K, T] {
 		return KeepVisiting
 	}
 
-	visit := fwdvisit
-	for _, direction := range []Direction{Forwards, Backwards} {
-		opts := DFSOpts[K, T]{Visit: &visit, All_paths: true, Direction: direction}
-		err := DFS(g, start, opts)
+	if end == nil {
+		visit := fwdvisit
+		for _, direction := range []Direction{Forwards, Backwards} {
+			opts := DFSOpts[K, T]{Visit: &visit, All_paths: true, Direction: direction}
+			err := DFS(g, start, opts)
+			if err != nil {
+				panic(err)
+			}
+			visit = bkwdvisit
+		}
+	} else {
+		path, err := ShortestPath(g, start, *end)
 		if err != nil {
 			panic(err)
 		}
-		visit = bkwdvisit
+		for i := range path {
+			if i == 0 {
+				continue
+			}
+			fwdvisit(path[i], path[i-1])
+		}
 	}
 
 	return subg
