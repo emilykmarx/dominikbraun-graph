@@ -7,6 +7,33 @@ and visualizing them.
 
 **Are you using graph? [Check out the graph user survey.](https://forms.gle/MLKUZKMeCRxTfj4v9)**
 
+# Known issues
+* `DFS()` with `All_paths:true` can hang
+	* Likely cause:
+		* If graph contains a cycle where one of the nodes within the cycle also has an edge to a leaf node. I believe this is because the visited_path map gets wiped entirely when traversal hits any leaf node
+	* Test case that hangs on some runs:
+```
+func TestCycle(t *testing.T) {
+	graph := newDirected(IntHash, &Traits{IsDirected: true}, newMemoryStore[int, int](), nil)
+	nodes := []int{1,2,3,4,5,7,8,9}
+	for _, node := range nodes {
+		graph.AddVertex(node)
+	}
+	graph.AddEdge(3,1)
+	graph.AddEdge(3,2)
+	graph.AddEdge(3,4)
+	graph.AddEdge(3,7)
+	graph.AddEdge(3,9)
+
+	graph.AddEdge(1,3)
+	graph.AddEdge(9,3)
+	graph.AddEdge(5,3)
+
+	Query[int, int](graph, 1, nil) // end == nil => just calls DFS() with `All_paths:true`
+
+}
+```
+
 # Features
 
 * Generic vertices of any type, such as `int` or `City`.
@@ -334,7 +361,7 @@ field.
 
 ```go
 edge, _ := g.Edge(1, 2)
-color := edge.Properties.Attributes["color"] 
+color := edge.Properties.Attributes["color"]
 ```
 
 ## Storing edge data
@@ -350,7 +377,7 @@ The stored data can be retrieved by getting the edge and accessing the `Properti
 
 ```go
 edge, _ := g.Edge(1, 2)
-myData := edge.Properties.Data 
+myData := edge.Properties.Data
 ```
 
 ### Updating edge data
