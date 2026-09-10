@@ -8,7 +8,7 @@ import (
 	"io"
 	"text/template"
 
-	"github.com/dominikbraun/graph"
+	graph "github.com/emilykmarx/dominikbraun-graph"
 )
 
 // ToDo: This template should be simplified and split into multiple templates.
